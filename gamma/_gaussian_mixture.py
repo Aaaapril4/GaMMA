@@ -378,8 +378,8 @@ def loss_and_grad(vars, data, station_locs, phase_type, weight, sigma=1, vel={"p
 def l1_bfgs(vars, data, station_locs, phase_type, weight, max_iter=5, convergence=1e-3, bounds=None, vel={"p":6.0, "s":6.0/1.75}, eikonal=None): 
 
     if eikonal is not None:
-        loc = invert_location(np.squeeze(data), [np.squeeze(vars)[-1]], np.squeeze(vars)[:-1], station_locs, phase_type, weight, eikonal['up'], eikonal['us'], eikonal['h'], eikonal['rgrid'], eikonal['zgrid'], bounds=bounds)
-        return [loc]
+        loc = invert_location(data, vars, station_locs, phase_type, weight, eikonal['up'], eikonal['us'], eikonal['h'], eikonal['rgrid'], eikonal['zgrid'], bounds=bounds[:-1])
+        return loc
 
     else:
         opt = optimize.minimize(loss_and_grad, np.squeeze(vars), method="L-BFGS-B", jac=True,
