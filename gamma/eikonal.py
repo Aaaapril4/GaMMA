@@ -238,7 +238,7 @@ def invert_location(
     add_eqt=False,
     gamma=0.1,
     max_iter=100,
-    convergence=1e-3,
+    convergence=1e-6,
 ):
     event_loc = torch.tensor(event_loc0, dtype=torch.float32, requires_grad=True, device=device)
     if bounds is not None:
