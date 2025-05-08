@@ -83,15 +83,15 @@ def association(picks, stations, config, event_idx0=0, method="BGMM", **kwargs):
         events = []
         assignment = []
         for unique_label in list(unique_labels):
+            mask = labels == unique_label
             events_, assignment_ = associate(
                 unique_label,
-                labels,
-                data,
-                locs,
-                phase_type,
-                phase_weight,
-                pick_idx,
-                pick_station_id,
+                data[mask],
+                locs[mask],
+                phase_type[mask],
+                phase_weight[mask],
+                pick_idx[mask],
+                pick_station_id[mask],
                 config,
                 timestamp0,
                 vel,
@@ -124,48 +124,57 @@ def association(picks, stations, config, event_idx0=0, method="BGMM", **kwargs):
         else:
             context = "fork"
         
-        with mp.get_context(context).Pool(config["ncpu"]) as p:
-            results = p.starmap(
-                associate,
-                [
-                    [
-                        k,
-                        labels,
-                        data,
-                        locs,
-                        phase_type,
-                        phase_weight,
-                        pick_idx,
-                        pick_station_id,
-                        config,
-                        timestamp0,
-                        vel,
-                        method,
-                        event_idx,
-                        lock,
-                    ]
-                    for k in unique_labels
-                ],
-                chunksize=chunk_size,
-            )
-            # resuts is a list of tuples, each tuple contains two lists events and assignment
-            # here we flatten the list of tuples into two lists
-            events, assignment = [],[]
-            for each_events, each_assignment in results:
-                events.extend(each_events)
-                assignment.extend(each_assignment)
+        try:
+            with mp.get_context(context).Pool(config["ncpu"]) as p:
+                batch_size = min(1000, len(unique_labels))
+                events, assignment = [], []
+                
+                for i in range(0, len(unique_labels), batch_size):
+                    batch_labels = unique_labels[i:i + batch_size]
+                    results = p.starmap(
+                        associate,
+                        [
+                            [
+                                k,
+                                data[labels == k],
+                                locs[labels == k],
+                                phase_type[labels == k],
+                                phase_weight[labels == k],
+                                pick_idx[labels == k],
+                                pick_station_id[labels == k],
+                                config,
+                                timestamp0,
+                                vel,
+                                method,
+                                event_idx,
+                                lock,
+                            ]
+                            for k in batch_labels
+                        ],
+                        chunksize=chunk_size,
+                    )
+                    
+                    for each_events, each_assignment in results:
+                        events.extend(each_events)
+                        assignment.extend(each_assignment)
+                    
+                    import gc
+                    gc.collect()
+                
+        finally:
+            if 'manager' in locals():
+                manager.shutdown()
 
     return events, assignment # , event_idx.value
 
 def associate(
     k,
-    labels,
-    data,
-    locs,
-    phase_type,
-    phase_weight,
-    pick_idx,
-    pick_station_id,
+    data_,
+    locs_,
+    phase_type_,
+    phase_weight_,
+    pick_idx_,
+    pick_station_id_,
     config,
     timestamp0,
     vel,
@@ -175,13 +184,6 @@ def associate(
 ):
     print(".", end="")
     
-    data_=data[labels==k]
-    locs_=locs[labels==k]
-    phase_type_=phase_type[labels==k]
-    phase_weight_=phase_weight[labels==k]
-    pick_idx_=pick_idx[labels==k]
-    pick_station_id_=pick_station_id[labels==k]
-
     max_num_event = max(Counter(pick_station_id_).values())
 
     if len(pick_idx_) < max(3, config["min_picks_per_eq"]):
@@ -251,10 +253,11 @@ def associate(
     assignment = []
 
     for i in range(len(centers_init)):
-        tmp_data = data_[pred == i]
-        tmp_locs = locs_[pred == i]
-        tmp_pick_station_id = pick_station_id_[pred == i]
-        tmp_phase_type = phase_type_[pred == i]
+        mask = pred == i
+        tmp_data = data_[mask]
+        tmp_locs = locs_[mask]
+        tmp_pick_station_id = pick_station_id_[mask]
+        tmp_phase_type = phase_type_[mask]
         if (len(tmp_data) == 0) or (len(tmp_data) < config["min_picks_per_eq"]):
             continue
 
@@ -308,9 +311,11 @@ def associate(
 
         if "min_p_picks_per_eq" in config:
             if len(tmp_data[idx_filter & (tmp_phase_type == "p")]) < config["min_p_picks_per_eq"]:
+                del t_, diff_t, idx_t, idx_s, idx_filter, a_, diff_a, idx_a
                 continue
         if "min_s_picks_per_eq" in config:
             if len(tmp_data[idx_filter & (tmp_phase_type == "s")]) < config["min_s_picks_per_eq"]:
+                del t_, diff_t, idx_t, idx_s, idx_filter, a_, diff_a, idx_a
                 continue
 
         if lock is not None:
@@ -349,11 +354,22 @@ def associate(
             event[k] = gmm.centers_[i, j]
         events.append(event)
 
-        for pi, pr in zip(pick_idx_[pred == i][idx_filter], prob):
-            assignment.append((pi, event_idx_value, pr))
+        filtered_pick_idx = pick_idx_[mask][idx_filter]
+        assignment.extend(zip(filtered_pick_idx, [event_idx_value] * len(filtered_pick_idx), prob))
 
         if (event_idx_value + 1) % 100 == 0:
             print(f"\nAssociated {event_idx_value + 1} events")
+
+        del t_, diff_t, idx_t, idx_s, idx_filter
+        if config["use_amplitude"]:
+            del a_, diff_a, idx_a
+        
+        if 'gmm' in locals():
+            del gmm
+        if 'prob_matrix' in locals():
+            del prob_matrix
+        if 'centers_init' in locals():
+            del centers_init
     return events, assignment
 
 
