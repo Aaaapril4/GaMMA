@@ -83,15 +83,15 @@ def association(picks, stations, config, event_idx0=0, method="BGMM", **kwargs):
         events = []
         assignment = []
         for unique_label in list(unique_labels):
-            mask = labels == unique_label
             events_, assignment_ = associate(
                 unique_label,
-                data[mask],
-                locs[mask],
-                phase_type[mask],
-                phase_weight[mask],
-                pick_idx[mask],
-                pick_station_id[mask],
+                labels,
+                data,
+                locs,
+                phase_type,
+                phase_weight,
+                pick_idx,
+                pick_station_id,
                 config,
                 timestamp0,
                 vel,
@@ -136,12 +136,13 @@ def association(picks, stations, config, event_idx0=0, method="BGMM", **kwargs):
                         [
                             [
                                 k,
-                                data[labels == k],
-                                locs[labels == k],
-                                phase_type[labels == k],
-                                phase_weight[labels == k],
-                                pick_idx[labels == k],
-                                pick_station_id[labels == k],
+                                labels,
+                                data,
+                                locs,
+                                phase_type,
+                                phase_weight,
+                                pick_idx,
+                                pick_station_id,
                                 config,
                                 timestamp0,
                                 vel,
@@ -169,12 +170,13 @@ def association(picks, stations, config, event_idx0=0, method="BGMM", **kwargs):
 
 def associate(
     k,
-    data_,
-    locs_,
-    phase_type_,
-    phase_weight_,
-    pick_idx_,
-    pick_station_id_,
+    labels,
+    data,
+    locs,
+    phase_type,
+    phase_weight,
+    pick_idx,
+    pick_station_id,
     config,
     timestamp0,
     vel,
@@ -183,6 +185,13 @@ def associate(
     lock=None,
 ):
     print(".", end="")
+
+    data_ = data[labels == k]
+    locs_ = locs[labels == k]
+    phase_type_ = phase_type[labels == k]
+    phase_weight_ = phase_weight[labels == k]
+    pick_idx_ = pick_idx[labels == k]
+    pick_station_id_ = pick_station_id[labels == k]
     
     max_num_event = max(Counter(pick_station_id_).values())
 
