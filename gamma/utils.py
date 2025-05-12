@@ -363,13 +363,6 @@ def associate(
         del t_, diff_t, idx_t, idx_s, idx_filter
         if config["use_amplitude"]:
             del a_, diff_a, idx_a
-        
-        if 'gmm' in locals():
-            del gmm
-        if 'prob_matrix' in locals():
-            del prob_matrix
-        if 'centers_init' in locals():
-            del centers_init
     return events, assignment
 
 
