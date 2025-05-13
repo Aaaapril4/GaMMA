@@ -124,48 +124,37 @@ def association(picks, stations, config, event_idx0=0, method="BGMM", **kwargs):
         else:
             context = "fork"
         
-        try:
-            with mp.get_context(context).Pool(config["ncpu"]) as p:
-                batch_size = min(1000, len(unique_labels))
-                events, assignment = [], []
-                
-                for i in range(0, len(unique_labels), batch_size):
-                    batch_labels = unique_labels[i:i + batch_size]
-                    results = p.starmap(
-                        associate,
-                        [
-                            [
-                                k,
-                                labels,
-                                data,
-                                locs,
-                                phase_type,
-                                phase_weight,
-                                pick_idx,
-                                pick_station_id,
-                                config,
-                                timestamp0,
-                                vel,
-                                method,
-                                event_idx,
-                                lock,
-                            ]
-                            for k in batch_labels
-                        ],
-                        chunksize=chunk_size,
-                    )
-                    
-                    for each_events, each_assignment in results:
-                        events.extend(each_events)
-                        assignment.extend(each_assignment)
-                    
-                    import gc
-                    gc.collect()
-                
-        finally:
-            if 'manager' in locals():
-                manager.shutdown()
+        with mp.get_context(context).Pool(config["ncpu"]) as p:
 
+            results = p.starmap(
+                associate,
+                [
+                    [
+                        k,
+                        labels,
+                        data,
+                        locs,
+                        phase_type,
+                        phase_weight,
+                        pick_idx,
+                        pick_station_id,
+                        config,
+                        timestamp0,
+                        vel,
+                        method,
+                        event_idx,
+                        lock,
+                    ]
+                    for k in unique_labels
+                ],
+                chunksize=chunk_size,
+            )
+                
+            events, assignment = [], []
+            for each_events, each_assignment in results:
+                events.extend(each_events)
+                assignment.extend(each_assignment)
+                
     return events, assignment # , event_idx.value
 
 def associate(
@@ -186,12 +175,13 @@ def associate(
 ):
     print(".", end="")
 
-    data_ = data[labels == k]
-    locs_ = locs[labels == k]
-    phase_type_ = phase_type[labels == k]
-    phase_weight_ = phase_weight[labels == k]
-    pick_idx_ = pick_idx[labels == k]
-    pick_station_id_ = pick_station_id[labels == k]
+    mask = labels == k
+    data_ = data[mask]
+    locs_ = locs[mask]
+    phase_type_ = phase_type[mask]
+    phase_weight_ = phase_weight[mask]
+    pick_idx_ = pick_idx[mask]
+    pick_station_id_ = pick_station_id[mask]
     
     max_num_event = max(Counter(pick_station_id_).values())
 
