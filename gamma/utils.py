@@ -2,6 +2,7 @@ import multiprocessing as mp
 from collections import Counter
 from datetime import datetime
 import platform
+import time
 
 import numpy as np
 import pandas as pd
@@ -169,6 +170,32 @@ def association(picks, stations, config, event_idx0=0, method="BGMM", **kwargs):
         # Clean up large arrays
         del labels, data, locs, phase_type, phase_weight, pick_idx, pick_station_id
 
+
+class LockWithTimeout:
+    def __init__(self, lock, timeout=30 * 60, max_hold_time=30 * 60):
+        self.lock = lock
+        self.timeout = timeout
+        self.max_hold_time = max_hold_time
+        self.acquired = False
+        self.hold_start_time = None
+
+    def __enter__(self):
+        start_time = time.time()
+        while time.time() - start_time < self.timeout:
+            if self.lock.acquire(block=False):
+                self.acquired = True
+                self.hold_start_time = time.time()
+                return self
+            time.sleep(0.1)
+        return None
+
+    def __exit__(self):
+        if self.acquired:
+            if time.time() - self.hold_start_time > self.max_hold_time:
+                print(f"\nLock held too long ({time.time() - self.hold_start_time:.1f}s), releasing")
+            self.lock.release()
+            self.acquired = False
+
 def associate(
     k,
     labels,
@@ -329,7 +356,12 @@ def associate(
                         continue
 
                 if lock is not None:
-                    with lock:
+                    # Use context manager for lock with timeout
+                    with LockWithTimeout(lock, timeout=5, max_hold_time=30) as lock_with_timeout:
+                        if lock_with_timeout is None:
+                            print(f"\nFailed to acquire lock for cluster {k}, skipping event")
+                            continue
+                        
                         if not isinstance(event_idx, int):
                             event_idx.value += 1
                             event_idx_value = event_idx.value
