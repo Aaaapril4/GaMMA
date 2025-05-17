@@ -182,19 +182,24 @@ class LockWithTimeout:
     def __enter__(self):
         start_time = time.time()
         while time.time() - start_time < self.timeout:
-            if self.lock.acquire(block=False):
-                self.acquired = True
-                self.hold_start_time = time.time()
-                return self
+            try:
+                # multiprocessing Lock doesn't support block parameter
+                if self.lock.acquire():
+                    self.acquired = True
+                    self.hold_start_time = time.time()
+                    return self
+            except:
+                pass
             time.sleep(0.1)
         return None
 
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         if self.acquired:
             if time.time() - self.hold_start_time > self.max_hold_time:
                 print(f"\nLock held too long ({time.time() - self.hold_start_time:.1f}s), releasing")
             self.lock.release()
             self.acquired = False
+
 
 def associate(
     k,
@@ -357,7 +362,7 @@ def associate(
 
                 if lock is not None:
                     # Use context manager for lock with timeout
-                    with LockWithTimeout(lock, timeout=5, max_hold_time=30) as lock_with_timeout:
+                    with LockWithTimeout(lock) as lock_with_timeout:
                         if lock_with_timeout is None:
                             print(f"\nFailed to acquire lock for cluster {k}, skipping event")
                             continue
