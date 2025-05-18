@@ -3,7 +3,6 @@ from collections import Counter
 from datetime import datetime
 import platform
 import time
-import os
 import numpy as np
 import pandas as pd
 from sklearn.cluster import DBSCAN
@@ -219,7 +218,6 @@ def associate(
 ):
     print(".", end="")
     try:
-        process_start_time = time.time()
         mask = labels == k
         data_ = data[mask]
         locs_ = locs[mask]
@@ -416,17 +414,16 @@ def associate(
                 if 't_' in locals():
                     del t_, diff_t, idx_t, idx_filter
 
-        process_end_time = time.time()
-        print(f"\nProcessing time for (PID: {os.getpid()}): {process_end_time - process_start_time:.2f}s")
-
         return events, assignment
         
     finally:
         # Clean up filtered arrays
         del data_, locs_, phase_type_, phase_weight_, pick_idx_, pick_station_id_
-        del pred, prob, prob_matrix, prob_eq
-        if 'gmm' in locals():
-            del gmm
+        for var in ['pred', 'prob', 'prob_matrix', 'prob_eq', 'gmm']:
+            try:
+                del locals()[var]
+            except KeyError:
+                pass
 
 
 def init_centers(config, data_, locs_, time_range, max_num_event=1):
