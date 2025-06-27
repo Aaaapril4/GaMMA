@@ -400,7 +400,11 @@ def associate(
                 events.append(event)
 
                 filtered_pick_idx = pick_idx_[mask][idx_filter]
-                assignment.extend(zip(filtered_pick_idx, [event_idx_value] * len(filtered_pick_idx), prob))
+                # Get the indices of the picks in the original data_ array
+                filtered_indices = np.where(mask)[0][idx_filter]
+                # For each filtered pick, get the responsibility (probability) for this event/component
+                pick_probs = prob_matrix[filtered_indices, i]
+                assignment.extend(zip(filtered_pick_idx, [event_idx_value] * len(filtered_pick_idx), pick_probs))
 
                 if (event_idx_value + 1) % 100 == 0:
                     print(f"\nAssociated {event_idx_value + 1} events")
